@@ -4,13 +4,13 @@ import axios from "axios";
 const app = express();
 app.use(express.json());
 
-// Variáveis (vão ficar no Render depois)
+// ===== VARIÁVEIS DE AMBIENTE =====
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const GRAPH_VERSION = "v20.0";
 
-// 1) Verificação do webhook (Meta chama via GET)
+// ===== WEBHOOK VERIFICATION (GET) =====
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -22,41 +22,42 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// Enviar texto
-async function sendText(to, body) {
+// ===== HELPERS =====
+
+// Enviar imagem (primeira mensagem)
+async function sendImage(to) {
   await axios.post(
     `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
     {
       messaging_product: "whatsapp",
       to,
-      type: "text",
-      text: { body }
+      type: "image",
+      image: {
+        link: "https://raw.githubusercontent.com/digitalhats2-source/whatsapp-bot/main/Menu.jpeg"
+      }
     },
-    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
+    {
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    }
   );
 }
 
-// Enviar botões (menu)
-async function sendMenu(to) {
+// Enviar botões
+async function sendButtons(to) {
   await axios.post(
     `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
-    
-      {
-  messaging_product: "whatsapp",
-  recipient_type: "individual",
-  type: "image",
-  image: {
-    link: "https://raw.githubusercontent.com/digitalhats2-source/whatsapp-bot/refs/heads/main/Menu.jpeg"
-  }
-},
-    
     {
       messaging_product: "whatsapp",
       to,
       type: "interactive",
       interactive: {
         type: "button",
-        body: { text: "Oi amor 😘\nQuer ver minhas fotos e vídeos mais ousados, que não vão pro feed? 🙈" },
+        body: {
+          text: "Oi amor 😘\nQuer ver minhas fotos e vídeos mais ousados, que não vão pro feed? 🙈"
+        },
         action: {
           buttons: [
             { type: "reply", reply: { id: "PREVIA", title: "Quero uma prévia" } },
@@ -66,11 +67,35 @@ async function sendMenu(to) {
         }
       }
     },
-    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
+    {
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    }
   );
 }
 
-// 2) Receber mensagens (Meta chama via POST)
+// Enviar texto simples
+async function sendText(to, body) {
+  await axios.post(
+    `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "text",
+      text: { body }
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+}
+
+// ===== RECEBER MENSAGENS (POST) =====
 app.post("/webhook", async (req, res) => {
   try {
     const entry = req.body.entry?.[0];
@@ -82,37 +107,48 @@ app.post("/webhook", async (req, res) => {
 
     const from = msg.from;
 
-    // Se clicou em botão
+    // ===== CLIQUE EM BOTÃO =====
     const buttonId = msg.interactive?.button_reply?.id;
+
     if (buttonId === "PREVIA") {
-      await sendText(from, "Certo. Aqui vai a prévia: https://seu-link-aqui");
-      await sendMenu(from);
-      return res.sendStatus(200);
-    }
-    if (buttonId === "VALORES") {
-      await sendText(from, "Valores: ...\nQuer pagar no Pix? Clique em 'Pagar no Pix'.");
-      await sendMenu(from);
-      return res.sendStatus(200);
-    }
-    if (buttonId === "PIX") {
-      await sendText(from, "Pix:\nChave: ...\nNome: ...\nValor: R$ ...\nDepois de pagar, responda PAGO.");
+      await sendText(from, "Essa é só uma prévia 😈\nQuer ver tudo? Clica em *Pagar no Pix*.");
       return res.sendStatus(200);
     }
 
-    // Se mandou texto (ex: “oi”)
-    const text = msg.text?.body?.trim();
-    if (text) {
-      await sendMenu(from);
+    if (buttonId === "VALORES") {
+      await sendText(
+        from,
+        "Tenho conteúdos exclusivos 🔥\nValores disponíveis:\n\n💋 Acesso VIP\n\nQuer pagar no Pix?"
+      );
+      return res.sendStatus(200);
+    }
+
+    if (buttonId === "PIX") {
+      await sendText(
+        from,
+        "💳 *Pagamento via Pix*\n\nChave: SUA_CHAVE_PIX\nNome: SEU_NOME\nValor: R$ XX,XX\n\nAssim que pagar, eu libero automaticamente 😘"
+      );
+      return res.sendStatus(200);
+    }
+
+    // ===== PRIMEIRA MENSAGEM (LEAD DIGITOU QUALQUER COISA) =====
+    if (msg.text?.body) {
+      await sendImage(from);
+      // pequeno delay pra ficar natural
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      await sendButtons(from);
     }
 
     return res.sendStatus(200);
   } catch (err) {
-    // Sempre 200 pra Meta não ficar reenviando
+    console.error(err.response?.data || err.message);
     return res.sendStatus(200);
   }
 });
 
-// rota simples pra teste do Render
+// ===== TESTE RENDER =====
 app.get("/", (req, res) => res.status(200).send("ok"));
 
-app.listen(process.env.PORT || 3000, () => console.log("bot on"));
+app.listen(process.env.PORT || 3000, () => {
+  console.log("🤖 Bot rodando");
+});
