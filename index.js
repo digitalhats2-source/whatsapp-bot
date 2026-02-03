@@ -15,28 +15,26 @@ const MENU_IMAGE_URL =
   process.env.MENU_IMAGE_URL ||
   "https://raw.githubusercontent.com/digitalhats2-source/whatsapp-bot/main/Menu.jpeg";
 
-const VIDEO_URL =
-  process.env.VIDEO_URL ||
+const PREVIEW_VIDEO_URL =
+  process.env.PREVIEW_VIDEO_URL ||
   "https://raw.githubusercontent.com/digitalhats2-source/whatsapp-bot/main/Video.mp4";
 
-// cache simples (evita upload toda hora)
+// Cache do media_id do vídeo (pra não fazer upload toda hora)
 let cachedVideoMediaId = null;
 let cachedVideoMediaIdAt = 0;
 const VIDEO_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
 
+function graphBaseUrl() {
+  return `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}`;
+}
 function authHeaders(extra = {}) {
   return { Authorization: `Bearer ${WHATSAPP_TOKEN}`, ...extra };
 }
-
-function graphUrl(path) {
-  return `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}${path}`;
-}
-
-async function graphPost(path, data, extraConfig = {}) {
-  return axios.post(graphUrl(path), data, {
-    headers: authHeaders(extraConfig.headers || {}),
+async function graphPost(path, data, config = {}) {
+  return axios.post(`${graphBaseUrl()}${path}`, data, {
+    headers: authHeaders(config.headers || {}),
     timeout: 30000,
-    ...extraConfig,
+    ...config,
   });
 }
 
@@ -65,7 +63,7 @@ async function sendImage(to) {
   console.log("sendImage OK:", resp.data);
 }
 
-// Botões iniciais (2 apenas)
+// Botões iniciais (2)
 async function sendButtons(to) {
   const resp = await graphPost("/messages", {
     messaging_product: "whatsapp",
@@ -73,10 +71,10 @@ async function sendButtons(to) {
     type: "interactive",
     interactive: {
       type: "button",
-      body: { text: "Oi amor 😘\nQuer ver algo exclusivo que não vai pro feed?" },
+      body: { text: "Olá! Quer ver uma amostra ou os valores?" },
       action: {
         buttons: [
-          { type: "reply", reply: { id: "PREVIA", title: "🔥 Ver prévia" } },
+          { type: "reply", reply: { id: "PREVIA", title: "🎬 Ver prévia" } },
           { type: "reply", reply: { id: "VALORES", title: "💰 Ver valores" } },
         ],
       },
@@ -85,7 +83,7 @@ async function sendButtons(to) {
   console.log("sendButtons OK:", resp.data);
 }
 
-// Upload do vídeo -> retorna media_id (padrão recomendado)
+// Upload do vídeo a partir de URL -> retorna media_id
 async function uploadVideoFromUrl(url) {
   const fileResp = await axios.get(url, {
     responseType: "arraybuffer",
@@ -96,84 +94,103 @@ async function uploadVideoFromUrl(url) {
   form.append("messaging_product", "whatsapp");
   form.append("type", "video/mp4");
   form.append("file", Buffer.from(fileResp.data), {
-    filename: "Video.mp4",
+    filename: "preview.mp4",
     contentType: "video/mp4",
   });
 
-  const up = await axios.post(
-    graphUrl("/media"),
-    form,
-    {
-      headers: authHeaders(form.getHeaders()),
-      timeout: 60000,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    }
-  );
+  const up = await axios.post(`${graphBaseUrl()}/media`, form, {
+    headers: authHeaders(form.getHeaders()),
+    timeout: 60000,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+  });
 
   console.log("uploadVideo OK:", up.data);
   return up.data.id;
 }
 
-async function getVideoMediaId() {
+async function getPreviewVideoMediaId() {
   const now = Date.now();
   if (cachedVideoMediaId && now - cachedVideoMediaIdAt < VIDEO_CACHE_TTL_MS) {
     return cachedVideoMediaId;
   }
-  const id = await uploadVideoFromUrl(VIDEO_URL);
+  const id = await uploadVideoFromUrl(PREVIEW_VIDEO_URL);
   cachedVideoMediaId = id;
   cachedVideoMediaIdAt = now;
   return id;
 }
 
-// Vídeo de prévia (via media id)
-async function sendVideo(to) {
-  const mediaId = await getVideoMediaId();
-
+// Envia prévia (vídeo via media_id)
+async function sendPreview(to) {
   try {
+    const mediaId = await getPreviewVideoMediaId();
+
     const resp = await graphPost("/messages", {
       messaging_product: "whatsapp",
       to,
       type: "video",
-      video: { id: mediaId, caption: "Só um gostinho do que tem no VIP 😈" },
+      video: { id: mediaId, caption: "Amostra do conteúdo." },
     });
-    console.log("sendVideo OK:", resp.data);
-  } catch (err) {
-    // Se o media_id morreu, tenta 1x reupload
-    const data = err.response?.data || err.message;
-    console.error("sendVideo FAIL:", data);
 
+    console.log("sendPreview OK:", resp.data);
+  } catch (err) {
+    console.error("sendPreview FAIL:", err.response?.data || err.message);
+
+    // reupload 1x se cache ficou inválido
     cachedVideoMediaId = null;
     cachedVideoMediaIdAt = 0;
 
-    const newId = await getVideoMediaId();
+    const mediaId = await getPreviewVideoMediaId();
     const resp2 = await graphPost("/messages", {
       messaging_product: "whatsapp",
       to,
       type: "video",
-      video: { id: newId, caption: "Só um gostinho do que tem no VIP 😈" },
+      video: { id: mediaId, caption: "Amostra do conteúdo." },
     });
-    console.log("sendVideo RETRY OK:", resp2.data);
+
+    console.log("sendPreview RETRY OK:", resp2.data);
   }
 }
 
-// Tabela de valores (texto)
-async function sendPrices(to) {
+// Tabela + 3 botões (quando clica em PRÉVIA ou VALORES)
+async function sendPriceTableWithButtons(to) {
+  const text = `💰 *Tabela de valores*
+
+🏅 Pacote Ouro por R$ 17,99
+🥈 Pacote Prata por R$ 12,99
+🥉 Pacote Bronze por R$ 7,99
+
+Qual você quer?`;
+
+  const resp = await graphPost("/messages", {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text },
+      action: {
+        buttons: [
+          { type: "reply", reply: { id: "BUY_OURO", title: "🏅 Ouro 17,99" } },
+          { type: "reply", reply: { id: "BUY_PRATA", title: "🥈 Prata 12,99" } },
+          { type: "reply", reply: { id: "BUY_BRONZE", title: "🥉 Bronze 7,99" } },
+        ],
+      },
+    },
+  });
+
+  console.log("sendPriceTable OK:", resp.data);
+}
+
+// Resposta simples quando escolhe um pacote
+async function sendChoiceAck(to, label) {
   const resp = await graphPost("/messages", {
     messaging_product: "whatsapp",
     to,
     type: "text",
-    text: {
-      body: `💰 *VALORES VIP*
-
-🔥 Acesso exclusivo
-📸 Fotos + 🎥 vídeos
-
-Pix disponível
-Quer garantir o seu acesso? 😘`,
-    },
+    text: { body: `Fechado: ${label}. Me diga o e-mail/WhatsApp para envio e forma de pagamento.` },
   });
-  console.log("sendPrices OK:", resp.data);
+  console.log("sendChoiceAck OK:", resp.data);
 }
 
 // ===== RECEBER MSG + STATUS =====
@@ -181,7 +198,7 @@ app.post("/webhook", async (req, res) => {
   try {
     const value = req.body.entry?.[0]?.changes?.[0]?.value;
 
-    // 1) Status (sent/delivered/read/failed)
+    // 1) Statuses (pra ver failed / motivo)
     const st = value?.statuses?.[0];
     if (st) {
       console.log("STATUS:", st.status, st.errors?.[0] || "");
@@ -195,21 +212,35 @@ app.post("/webhook", async (req, res) => {
     const from = msg.from;
     const buttonId = msg.interactive?.button_reply?.id;
 
-    // 🔥 VER PRÉVIA
+    // Clique em botões
     if (buttonId === "PREVIA") {
-      await sendVideo(from);
+      await sendPreview(from);
       await new Promise((r) => setTimeout(r, 600));
-      await sendPrices(from);
+      await sendPriceTableWithButtons(from);
       return res.sendStatus(200);
     }
 
-    // 💰 VER VALORES
     if (buttonId === "VALORES") {
-      await sendPrices(from);
+      await sendPriceTableWithButtons(from);
       return res.sendStatus(200);
     }
 
-    // PRIMEIRA MSG DO LEAD
+    if (buttonId === "BUY_OURO") {
+      await sendChoiceAck(from, "Pacote Ouro (R$ 17,99)");
+      return res.sendStatus(200);
+    }
+
+    if (buttonId === "BUY_PRATA") {
+      await sendChoiceAck(from, "Pacote Prata (R$ 12,99)");
+      return res.sendStatus(200);
+    }
+
+    if (buttonId === "BUY_BRONZE") {
+      await sendChoiceAck(from, "Pacote Bronze (R$ 7,99)");
+      return res.sendStatus(200);
+    }
+
+    // Primeira mensagem do lead (texto)
     if (msg.text?.body) {
       await sendImage(from);
       await new Promise((r) => setTimeout(r, 600));
