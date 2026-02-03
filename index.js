@@ -156,10 +156,6 @@ async function sendPreview(to) {
 async function sendPriceTableWithButtons(to) {
   const text = `💰 *Tabela de valores*
 
-🏅 Pacote Ouro por R$ 17,99
-🥈 Pacote Prata por R$ 12,99
-🥉 Pacote Bronze por R$ 7,99
-
 Qual você quer?`;
 
   const resp = await graphPost("/messages", {
@@ -171,9 +167,9 @@ Qual você quer?`;
       body: { text },
       action: {
         buttons: [
-          { type: "reply", reply: { id: "BUY_OURO", title: "🏅 Ouro 17,99" } },
-          { type: "reply", reply: { id: "BUY_PRATA", title: "🥈 Prata 12,99" } },
-          { type: "reply", reply: { id: "BUY_BRONZE", title: "🥉 Bronze 7,99" } },
+          { type: "reply", reply: { id: "BUY_OURO", title: "🏅 20 fotos + 15 vídeos por 17,99" } },
+          { type: "reply", reply: { id: "BUY_PRATA", title: "🥈10 fotos + 8 vídeos por R$12,99" } },
+          { type: "reply", reply: { id: "BUY_BRONZE", title: "🥉5 fotos + 4 vídeos por R$7,99" } },
         ],
       },
     },
