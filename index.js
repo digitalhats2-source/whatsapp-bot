@@ -4,13 +4,13 @@ import axios from "axios";
 const app = express();
 app.use(express.json());
 
-// ===== VARIÁVEIS DE AMBIENTE =====
+// ===== VARIÁVEIS =====
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const GRAPH_VERSION = "v20.0";
 
-// ===== WEBHOOK VERIFICATION (GET) =====
+// ===== WEBHOOK VERIFY =====
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -24,7 +24,7 @@ app.get("/webhook", (req, res) => {
 
 // ===== HELPERS =====
 
-// Enviar imagem (primeira mensagem)
+// Imagem inicial
 async function sendImage(to) {
   await axios.post(
     `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
@@ -36,16 +36,11 @@ async function sendImage(to) {
         link: "https://raw.githubusercontent.com/digitalhats2-source/whatsapp-bot/main/Menu.jpeg"
       }
     },
-    {
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json"
-      }
-    }
+    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
   );
 }
 
-// Enviar botões
+// Botões iniciais (2 apenas)
 async function sendButtons(to) {
   await axios.post(
     `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
@@ -56,86 +51,87 @@ async function sendButtons(to) {
       interactive: {
         type: "button",
         body: {
-          text: "Oi amor 😘\nQuer ver minhas fotos e vídeos mais ousados, que não vão pro feed? 🙈"
+          text: "Oi amor 😘\nQuer ver algo exclusivo que não vai pro feed?"
         },
         action: {
           buttons: [
-            { type: "reply", reply: { id: "PREVIA", title: "Quero uma prévia" } },
-            { type: "reply", reply: { id: "VALORES", title: "Ver valores" } },
-            { type: "reply", reply: { id: "PIX", title: "Pagar no Pix" } }
+            { type: "reply", reply: { id: "PREVIA", title: "🔥 Ver prévia" } },
+            { type: "reply", reply: { id: "VALORES", title: "💰 Ver valores" } }
           ]
         }
       }
     },
-    {
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json"
-      }
-    }
+    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
   );
 }
 
-// Enviar texto simples
-async function sendText(to, body) {
+// Vídeo de prévia
+async function sendVideo(to) {
+  await axios.post(
+    `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
+    {
+      messaging_product: "whatsapp",
+      to,
+      type: "video",
+      video: {
+        link: "https://SEU_LINK_DE_VIDEO_AQUI.mp4",
+        caption: "Só um gostinho do que tem no VIP 😈"
+      }
+    },
+    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
+  );
+}
+
+// Tabela de valores (texto)
+async function sendPrices(to) {
   await axios.post(
     `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
     {
       messaging_product: "whatsapp",
       to,
       type: "text",
-      text: { body }
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json"
+      text: {
+        body:
+`💰 *VALORES VIP*
+
+🔥 Acesso exclusivo
+📸 Fotos + 🎥 vídeos
+
+Pix disponível
+Quer garantir o seu acesso? 😘`
       }
-    }
+    },
+    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` } }
   );
 }
 
-// ===== RECEBER MENSAGENS (POST) =====
+// ===== RECEBER MSG =====
 app.post("/webhook", async (req, res) => {
   try {
-    const entry = req.body.entry?.[0];
-    const changes = entry?.changes?.[0];
-    const value = changes?.value;
-    const msg = value?.messages?.[0];
-
+    const msg = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
     if (!msg) return res.sendStatus(200);
 
     const from = msg.from;
-
-    // ===== CLIQUE EM BOTÃO =====
     const buttonId = msg.interactive?.button_reply?.id;
 
+    // 🔥 VER PRÉVIA
     if (buttonId === "PREVIA") {
-      await sendText(from, "Essa é só uma prévia 😈\nQuer ver tudo? Clica em *Pagar no Pix*.");
+      await sendVideo(from);
+      await new Promise(r => setTimeout(r, 600));
+      await sendPrices(from);
       return res.sendStatus(200);
     }
 
+    // 💰 VER VALORES
     if (buttonId === "VALORES") {
-      await sendText(
-        from,
-        "Tenho conteúdos exclusivos 🔥\nValores disponíveis:\n\n💋 Acesso VIP\n\nQuer pagar no Pix?"
-      );
+      await sendPrices(from);
       return res.sendStatus(200);
     }
 
-    if (buttonId === "PIX") {
-      await sendText(
-        from,
-        "💳 *Pagamento via Pix*\n\nChave: SUA_CHAVE_PIX\nNome: SEU_NOME\nValor: R$ XX,XX\n\nAssim que pagar, eu libero automaticamente 😘"
-      );
-      return res.sendStatus(200);
-    }
-
-    // ===== PRIMEIRA MENSAGEM (LEAD DIGITOU QUALQUER COISA) =====
+    // PRIMEIRA MSG DO LEAD
     if (msg.text?.body) {
       await sendImage(from);
-      // pequeno delay pra ficar natural
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      await new Promise(r => setTimeout(r, 600));
       await sendButtons(from);
     }
 
@@ -146,8 +142,8 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ===== TESTE RENDER =====
-app.get("/", (req, res) => res.status(200).send("ok"));
+// ===== TESTE =====
+app.get("/", (req, res) => res.send("ok"));
 
 app.listen(process.env.PORT || 3000, () => {
   console.log("🤖 Bot rodando");
