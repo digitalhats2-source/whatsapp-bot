@@ -156,6 +156,10 @@ async function sendPreview(to) {
 async function sendPriceTableWithButtons(to) {
   const text = `💰 *Tabela de valores*
 
+🏅 20 fotos + 15 vídeos
+🥈10 fotos + 8 vídeos
+🥉5 fotos + 4 vídeos
+
 Qual você quer?`;
 
   const resp = await graphPost("/messages", {
@@ -167,9 +171,9 @@ Qual você quer?`;
       body: { text },
       action: {
         buttons: [
-          { type: "reply", reply: { id: "BUY_OURO", title: "🏅 20 fotos + 15 vídeos por 17,99" } },
-          { type: "reply", reply: { id: "BUY_PRATA", title: "🥈10 fotos + 8 vídeos por R$12,99" } },
-          { type: "reply", reply: { id: "BUY_BRONZE", title: "🥉5 fotos + 4 vídeos por R$7,99" } },
+          { type: "reply", reply: { id: "BUY_OURO", title: "🏅 R$17,99" } },
+          { type: "reply", reply: { id: "BUY_PRATA", title: "🥈 R$12,99" } },
+          { type: "reply", reply: { id: "BUY_BRONZE", title: "🥉 R$7,99" } },
         ],
       },
     },
