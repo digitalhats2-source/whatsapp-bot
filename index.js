@@ -74,7 +74,7 @@ async function sendVideo(to) {
       to,
       type: "video",
       video: {
-        link: "https://SEU_LINK_DE_VIDEO_AQUI.mp4",
+        link: "https://github.com/digitalhats2-source/whatsapp-bot/raw/refs/heads/main/Video.mp4",
         caption: "Só um gostinho do que tem no VIP 😈"
       }
     },
