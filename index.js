@@ -129,7 +129,7 @@ async function sendPreview(to) {
       messaging_product: "whatsapp",
       to,
       type: "video",
-      video: { id: mediaId, caption: "Só um gostinho do que tem no VIP 😈" },
+      video: { id: mediaId, caption: "Só um gostinho do que tem 😈" },
     });
 
     console.log("sendPreview OK:", resp.data);
