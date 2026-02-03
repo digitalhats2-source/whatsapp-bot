@@ -40,6 +40,16 @@ async function sendText(to, body) {
 async function sendMenu(to) {
   await axios.post(
     `https://graph.facebook.com/${GRAPH_VERSION}/${PHONE_NUMBER_ID}/messages`,
+    
+      {
+  messaging_product: "whatsapp",
+  recipient_type: "individual",
+  type: "image",
+  image: {
+    link: "https://raw.githubusercontent.com/digitalhats2-source/whatsapp-bot/refs/heads/main/Menu.jpeg"
+  }
+},
+    
     {
       messaging_product: "whatsapp",
       to,
