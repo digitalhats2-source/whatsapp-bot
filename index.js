@@ -46,7 +46,7 @@ async function sendMenu(to) {
       type: "interactive",
       interactive: {
         type: "button",
-        body: { text: "Oi amor 😘\nQuer ver minhas fotos e vídeos mais ousados, que não vão pro feed? 🔞🙈" },
+        body: { text: "Oi amor 😘\nQuer ver minhas fotos e vídeos mais ousados, que não vão pro feed? 🙈" },
         action: {
           buttons: [
             { type: "reply", reply: { id: "PREVIA", title: "Quero uma prévia" } },
